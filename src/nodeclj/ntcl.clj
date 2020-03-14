@@ -4,9 +4,9 @@
              :refer [>! <! >!! <!! go chan buffer close! thread
                      alts! alts!! timeout]])
   (:require [clojure.string :as str])
-  (:import (java.net Socket)
+  (:require [clojure.java.io :as io])
+  (:import (java.net Socket ServerSocket)
            (java.io PrintWriter InputStreamReader BufferedReader)))
-
 
 (declare conn-handler)
 
@@ -14,70 +14,117 @@
 
 (defn write [conn msg]
   (println "> write " msg)
-  (doto (:out @conn)
+  (doto (:ntwkout @conn)
     (.println (str msg "\r"))
     (.flush)))
 
-(defn put-write [req conn]
-  (println ">> " req)
-  (let [reply (str "PONG " (re-find #":.*" req))]
-    (println "reply " reply)
-    (>!! (:write_queue @conn) reply)))
+(defn send-msg
+  "Send the message"
+  [conn msg]
+  (println "send-msg " msg (type msg))
+  (.write (:ntwkout @conn) msg)
+  (.flush (:ntwkout @conn)))
 
-(defn handle-pong [req conn]
-  (println "pong >> " req))
   
-(defn handle-req [msg conn]
-  (println "handle req " msg)
-  )
+(defn handle-req [cmd data]
+  (println "handle req " cmd data)
+  (case cmd
+    :PING  (str {:type :REP :CMD :PONG})  
+  ))
 
-(defn read-msg-handler [msg conn]
+(defn read-msg-handlertel 
+  "telnet like message format"
+  [msg conn]
   (println "handle " msg)
   (let [msgv (str/split msg #"#")
         msgtype (get msgv 0)
         cmd (get msgv 1)
-        ]
+        data (get msgv 2)]
     (println msgv)
     (case msgtype
-      "REQ" (handle-req msg conn)
+      "REQ" (handle-req cmd data)
+      "error"
       )))
+
+
+(defn read-msg-handler [msg conn]
+  (println "handle " msg)
+  (let [msgv (read-string msg)
+        msgtype (:type msgv)
+        cmd (:cmd msgv)
+        data (:data msgv)]
+    (println msgv)
+    (case msgtype
+      :REQ (handle-req cmd data)
+      "error")))
+
   
-;   (cond
-;     ;(re-find #"^ERROR :Closing Link:" msg)
-;     ;(dosync (alter conn merge {:exit true}))
-;     (re-find #"^PING" msg)
-;     (put-write msg conn)
-;     (re-find #"^PONG" msg)
-;     (handle-pong msg conn)))
-    ;(write conn (str "PONG " (re-find #":.*" msg)))))
-
-
 (defn read-processor [conn]
-  (while (nil? (:exit @conn))
+  (while true; (nil? (:exit @conn))
     (let [readmsg (<!! (:read_queue @conn))]   
-    (println "[read-processor] " readmsg)
-    (read-msg-handler readmsg conn))))
+      (println "[read-processor] " readmsg)
+      (let [reply (read-msg-handler readmsg conn)]
+        (println "reply" reply)
+         (>!! (:write_queue @conn) reply)
+        ))))
 
 (defn read-queue [conn]
-  (while (nil? (:exit @conn))
+  (while true ;(nil? (:exit @conn))
     (println "read loop")
-    (let [msg (.readLine (:in @conn))]
+    (let [msg (.readLine (:ntwkin @conn))]
       (println "[readhandler] " msg)
       (>!! (:read_queue @conn) msg))))
 
 (defn write-queue [conn]
   (while (nil? (:exit @conn))
-    (println "[write-queue] " (<!! (:write_queue @conn)))))
+    (let [msg (<!! (:write_queue @conn))]
+      (println "[write-queue] " msg)
+      (send-msg conn msg))))
 
+(defn wrap-socket [socket]
+  (let [in (BufferedReader. (InputStreamReader. (.getInputStream socket)))
+        out (PrintWriter. (.getOutputStream socket))
+        conn (ref {:ntwkin in :ntwkout out :read_queue (chan) :write_queue (chan)})]
+    conn))
 
 (defn connect [server]
-  (let [socket (Socket. (:name server) (:port server))
-        in (BufferedReader. (InputStreamReader. (.getInputStream socket)))
-        out (PrintWriter. (.getOutputStream socket))
-        conn (ref {:in in :out out :read_queue (chan) :write_queue (chan)})
+  "connect to outbound"
+  (let [socket (Socket. (:name server) (:port server))        
+        conn (wrap-socket socket)
         ]
     ;(read-processor conn)
     (doto (Thread. #(read-queue conn)) (.start))
     (doto (Thread. #(read-processor conn)) (.start))
     (doto (Thread. #(write-queue conn)) (.start))
     conn))
+
+
+(defn serve1 [port]
+  "inbound connections"
+  (println "serve " port)  
+  ;(with-open [srv-sock (ServerSocket. port)
+  (let [srv-sock (ServerSocket. port)
+        socket (.accept srv-sock)
+        conn (wrap-socket socket)
+        ]
+    (println "connected " conn)
+    (doto (Thread. #(read-queue conn)) (.start))
+    (doto (Thread. #(read-processor conn)) (.start))
+    (doto (Thread. #(write-queue conn)) (.start))    
+    ))
+
+(defn serve [nodeport]
+  (println "serve " nodeport)
+  (let [running (atom true)]
+    (future
+      ;(with-open [server-sock (ServerSocket. nodeport)]
+      (let [server-sock (ServerSocket. nodeport)]
+      (while @running
+        ;(with-open [socket (.accept server-sock)]
+        (let [socket (.accept server-sock)
+              conn (wrap-socket socket)]
+            (println "connected " conn)
+            (doto (Thread. #(read-queue conn)) (.start))
+            (doto (Thread. #(read-processor conn)) (.start))
+            (doto (Thread. #(write-queue conn)) (.start))))))
+    running))
