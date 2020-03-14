@@ -12,13 +12,14 @@
 
 (defn receive
   "Read a line of textual data from the given socket"
-  [socket]
-  (.readLine (io/reader socket)))
+  [conn]
+  (.readLine (:ntwkin @conn)))
+  ;(.readLine (io/reader socket)))
 
 (defn send
   "Send the given string message out over the given socket"
-  [socket msg]
-  (let [writer (io/writer socket)]
+  [conn msg]
+  (let [writer (:ntwkout @conn)]
       (.write writer msg)
       (.flush writer)))
 
@@ -29,22 +30,35 @@
           msg-out (handler msg-in)]
       (send sock msg-out))))
 
-(defn handle-req [sock handler]
-  (let [msg-in (receive sock)
+(defn handle-req [conn handler]
+  (let [msg-in (receive conn)
         msg-out (handler msg-in)]
-    (send sock msg-out)))
+    (send conn msg-out)))
+
+(defn handle-req-loop [conn handler]
+  (println "handle-req-loop")
+  (while true
+    (println "loop")
+    (handle-req conn handler)))
+
+(defn wrap-socket [socket]
+  (let [in (BufferedReader. (InputStreamReader. (.getInputStream socket)))
+        out (PrintWriter. (.getOutputStream socket))
+        conn (ref {:ntwkin in :ntwkout out :read_queue (chan) :write_queue (chan)})]
+    conn))
 
 (defn serve-persistent [port handler]
   (println "serve-persistent")
   (let [running (atom true)]    
-      (with-open [server-sock (ServerSocket. port)]
-        (println "open server " server-sock)
+      (let [server-sock (ServerSocket. port)]
+        (println "server " server-sock)
         (while @running
-          (with-open [sock (.accept server-sock)]
+          (let [sock (.accept server-sock)
+                conn (wrap-socket sock)
+                ]
             (println "open sock " sock)
-            (while true
-              (println "loop")
-              (handle-req sock handler))
+            (doto (Thread. #(handle-req-loop conn handler)) (.start))
+            (println "next")
             )))
     running))
 
