@@ -29,5 +29,5 @@
 
   ;(ntcl/serve nodeport)
   ;;(def a (serve-persistent 8888 #(.toUpperCase %)))
-  (t/serve-persistent 8888 #(.toUpperCase %))
+  (t/serve 8888)
   )
