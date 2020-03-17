@@ -9,7 +9,6 @@
          (java.io PrintWriter InputStreamReader BufferedReader)))
 
 
-
 (defn ntwk-read
   "Read a line of text from the given socket"
   [conn]
