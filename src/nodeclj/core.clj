@@ -36,7 +36,7 @@
 (defn -main
   [& args]
   (println "run main")
-  (t/start server)
+  ;(t/start server)
 
   ;(ntcl/serve nodeport)
   ;;(def a (serve-persistent 8888 #(.toUpperCase %)))
