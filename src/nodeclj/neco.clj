@@ -80,7 +80,7 @@
      (let [msg (<! (get @c :read_queue))
            t (:type msg)
            ]
-       (println t ":" msg)
+       (println "read process " t ":" msg)
        (case t
          :REQ (>! (get @c :REQin) msg))
      (recur))))
@@ -93,7 +93,7 @@
      (println "[" *fn-name* "] loop")
      (let [req (<! (get @c inc))
            cmd (:CMD req)] ;test malformed
-       (println (str inc) ":" req)
+       (println "req " (str inc) ":" req)
        (case cmd
          :PING (>! (get @c outc) (str {:CMD :PONG})))         
      (recur)))))
@@ -118,8 +118,9 @@
 (defprocess connect [c1 c2]
   (go-loop []
     (let [msg1 (<! (get @c1 :write_queue))]
-      (>! (get @c2 :read_queue) msg1))
-    (recur)))
+      (println "from c1 write to c2")
+      (>! (get @c2 :read_queue) msg1)
+    (recur))))
 
 (defprocess simnet
   "simulate network. everything on writer will go to reader"
@@ -127,8 +128,11 @@
   (connect c1 c2)
   (connect c2 c1))
 
-(in-ns 'nodeclj.neco)
 
+;;;;; REPL
+
+
+(in-ns 'nodeclj.neco)
 
 (def c1 (new-conn))
 (setup c1)
@@ -140,9 +144,45 @@
 
 (def t {:type :REQ :CMD :PING})
 
-
 (put! (:read_queue @c1) t)
 
 (put! (:write_queue @c1) t)
 
+(take! (:read_queue @c2) (fn [x] (println x))))
+
+(go-loop [] 
+  (println ">>> " (<! (:read_queue @c2)))
+(recur))
+
 ; (go-loop [] (println ">>"  (<! (:write_queue @c))))
+
+(go (println (<! (:read_queue @c2))))
+
+(go-loop []  
+  (println "## " (<! (:read_queue @c2)))
+(recur))
+
+
+(go (>! (:read_queue @c2) "test"))
+
+(go (>! (:read_queue @c2) t))
+
+
+(defn append-vec! 
+  [v x]
+  "append element to vector"
+  (reset! v (conj @v x)))
+
+(defn append-vmap! 
+  [m v]
+  "append inside map"
+  (reset! m (assoc @m :log (append-vec! (:log xm) v))))
+
+(defn swap-assoc! 
+  [m k v]
+  "append to vector inside map"
+  (swap! m assoc k (conj (get @m k) v)))
+
+
+;(def m (atom {:log [] :b "B"}))
+;(swap-assoc! m :log "testt3355")
