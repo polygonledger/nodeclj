@@ -1,3 +1,4 @@
+
 (ns nodeclj.neco
 (:require [clojure.core.async
            :as a
@@ -7,6 +8,22 @@
 (:require [clojure.java.io :as io])
 (:import (java.net Socket ServerSocket)
          (java.io PrintWriter InputStreamReader BufferedReader)))
+
+(defn append-vec! 
+  [v x]
+  "append element to vector"
+  (reset! v (conj @v x)))
+
+(defn append-vmap! 
+  [m v]
+  "append inside map"
+  (reset! m (assoc @m :log (append-vec! (:log m) v))))
+
+(defn swap-append! 
+  [m k v]
+  "append to vector inside map"
+  (swap! m assoc k (conj (get @m k) v)))
+
 
 (defn processor [conn]
   (while true
@@ -34,21 +51,44 @@
 ;         ))))
 
 (defn new-conn []
-  (ref {:log [] :write_queue (chan) :read_queue (chan) :REQin (chan) :REQ_out (chan) :REPin (chan) :REPout (chan)}))
+  (atom {:log [] :write_queue (chan) :read_queue (chan) :REQin (chan) :REQ_out (chan) :REPin (chan) :REPout (chan)}))
 
 ;; (let [conn (new-conn)]
 ;;   (println conn)
 ;;   )
 
 
-(defmacro defprocess [name params & body]
+(defn addlog [p s]
+  (swap-append! p :log s))
+
+(defmacro defprocess1 [name params & body]
+  "define a running process which operates on map of channels
+   add helper functions for a process for logging etc"
   (println "macro process")
-  `(let [~'*fn-name* ~(str name)
-         ]
+  `(let [~'*fn-name* ~(str name)]
      (println "> setup > " ~'*fn-name*)
-     ;(conj (:log conn) (str "setup " ~'*fn-name*))
      (defn ~name ~params
-       ~@body)))
+       (do (println "setup " ~'*fn-name*) 
+           ~@body))))
+
+(defmacro defprocess [name chanm & body]
+  "define a running process which operates on map of channels
+   add helper functions for a process for logging etc"
+  `(let [~'*fn-name* ~(str name)]
+     (defn ~name ~chanm
+       (do (println ">> setup " ~'*fn-name*) 
+           ;(println ~chanm)
+           ;cannot be cast to future?
+           ;(addlog ~chanm "test") ; (str "setup " ~'*fn-name*))
+           ~@body))))
+
+;more general macro
+;(defmacro processor
+;go-loop
+;body
+;recur 
+
+
 
 ;; (defn write-queue-process [c]
 ;;    (go-loop [] counter
@@ -60,16 +100,14 @@
 
 
 
-
 (defprocess write-queue [c]
-  (println "setup " *fn-name*)
-;  (conj (:log @c) (str "setup " *fn-name*))
-
-  ;(swap! @c assoc :log (conj  (str "setup " *fn-name*)))
+  (addlog c (str "setup " *fn-name*))
+  ;(println (str "setup " *fn-name*))
   (go-loop []
     (println "[" *fn-name* "]")
     (let [msg (<! (get @c :write_queue))]
       (println "[" *fn-name* "] write to net " msg)
+      (addlog c (str "[" *fn-name* "] write to net " msg))
     (recur))))
 
 
@@ -78,9 +116,8 @@
    (go-loop [] ;counter
      (println "[" *fn-name* "] loop")
      (let [msg (<! (get @c :read_queue))
-           t (:type msg)
-           ]
-       (println "read process " t ":" msg)
+           t (:type msg)]
+      (addlog c (str "[" *fn-name* "] " msg " " t))
        (case t
          :REQ (>! (get @c :REQin) msg))
      (recur))))
@@ -99,8 +136,7 @@
      (recur)))))
 
 (defprocess rep-process [c]
- (let [outc :REPout
-       ]
+ (let [outc :REPout]
    (go-loop [] ;counter
      (println "[" *fn-name* "] loop")
      (let [rep (<! (get @c outc))]
@@ -110,6 +146,7 @@
      (recur)))))
 
 (defn setup [c]
+  (addlog c "setup")
   (write-queue c)
   (read-process c)
   (req-process c)
@@ -148,41 +185,26 @@
 
 (put! (:write_queue @c1) t)
 
-(take! (:read_queue @c2) (fn [x] (println x))))
+(take! (:read_queue @c2) (fn [x] (println x)))
 
-(go-loop [] 
-  (println ">>> " (<! (:read_queue @c2)))
-(recur))
+(write-queue c1)
+
+;(go-loop [] 
+;  (println ">>> " (<! (:read_queue @c2)))
+;(recur))
 
 ; (go-loop [] (println ">>"  (<! (:write_queue @c))))
 
-(go (println (<! (:read_queue @c2))))
+;(go (println (<! (:read_queue @c2))))
 
-(go-loop []  
-  (println "## " (<! (:read_queue @c2)))
-(recur))
-
-
-(go (>! (:read_queue @c2) "test"))
-
-(go (>! (:read_queue @c2) t))
+;(go-loop []  
+;  (println "## " (<! (:read_queue @c2)))
+;(recur))
 
 
-(defn append-vec! 
-  [v x]
-  "append element to vector"
-  (reset! v (conj @v x)))
+;(go (>! (:read_queue @c2) "test"))
 
-(defn append-vmap! 
-  [m v]
-  "append inside map"
-  (reset! m (assoc @m :log (append-vec! (:log xm) v))))
-
-(defn swap-assoc! 
-  [m k v]
-  "append to vector inside map"
-  (swap! m assoc k (conj (get @m k) v)))
-
+;(go (>! (:read_queue @c2) t))
 
 ;(def m (atom {:log [] :b "B"}))
-;(swap-assoc! m :log "testt3355")
+;(swap-append! m :log "tezz")
