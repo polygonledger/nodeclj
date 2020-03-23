@@ -8,6 +8,7 @@
 (:import (java.net Socket ServerSocket)
          (java.io PrintWriter InputStreamReader BufferedReader)))
 
+;OLD
 
 (defn ntwk-read
   "Read a line of text from the given socket"

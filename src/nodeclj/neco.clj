@@ -1,4 +1,3 @@
-
 (ns nodeclj.neco
 (:require [clojure.core.async
            :as a
@@ -6,8 +5,12 @@
                    alts! alts!! timeout]])
 (:require [clojure.string :as str])
 (:require [clojure.java.io :as io])
+;(:require [nodeclj :as io])
 (:import (java.net Socket ServerSocket)
          (java.io PrintWriter InputStreamReader BufferedReader)))
+
+;;; neco i.e. network control -
+;;; channel abstraction over network
 
 (defn append-vec! 
   [v x]
@@ -40,47 +43,24 @@
 
 
 
-
-; (defn read-processor [conn]
-;   (while true; (nil? (:exit @conn))
-;     (let [readmsg (<!! (:REQin @conn))]   
-;       (println "[read-processor] " readmsg)
-;       (let [reply (read-msg-handler readmsg conn)]
-;         (println "reply" reply)
-;          (>!! (:write_queue @conn) reply)
-;         ))))
-
-(defn new-conn []
+(defn new-nconn []
   (atom {:log [] :write_queue (chan) :read_queue (chan) :REQin (chan) :REQ_out (chan) :REPin (chan) :REPout (chan)}))
-
-;; (let [conn (new-conn)]
-;;   (println conn)
-;;   )
 
 
 (defn addlog [p s]
   (swap-append! p :log s))
-
-(defmacro defprocess1 [name params & body]
-  "define a running process which operates on map of channels
-   add helper functions for a process for logging etc"
-  (println "macro process")
-  `(let [~'*fn-name* ~(str name)]
-     (println "> setup > " ~'*fn-name*)
-     (defn ~name ~params
-       (do (println "setup " ~'*fn-name*) 
-           ~@body))))
 
 (defmacro defprocess [name chanm & body]
   "define a running process which operates on map of channels
    add helper functions for a process for logging etc"
   `(let [~'*fn-name* ~(str name)]
      (defn ~name ~chanm
-       (do (println ">> setup " ~'*fn-name*) 
+       ;(do 
+           ;(println ">> setup " ~'*fn-name*) 
            ;(println ~chanm)
            ;cannot be cast to future?
            ;(addlog ~chanm "test") ; (str "setup " ~'*fn-name*))
-           ~@body))))
+           ~@body)))
 
 ;more general macro
 ;(defmacro processor
@@ -88,15 +68,6 @@
 ;body
 ;recur 
 
-
-
-;; (defn write-queue-process [c]
-;;    (go-loop [] counter
-;;      (println "write q process")
-;;      (let [msg (<! (get @c :write_queue))
-;;            ]
-;;        (println "write to network " msg)
-;;      (recur))))
 
 
 
@@ -112,6 +83,7 @@
 
 
 (defprocess read-process [c]
+  """ read from queue and process """
   (println "setup " *fn-name*)
    (go-loop [] ;counter
      (println "[" *fn-name* "] loop")
@@ -124,6 +96,7 @@
 
 
 (defprocess req-process [c]
+  """ process requests """
  (let [inc :REQin
        outc :REPout]
    (go-loop [] ;counter
@@ -136,6 +109,7 @@
      (recur)))))
 
 (defprocess rep-process [c]
+  """ process replies """
  (let [outc :REPout]
    (go-loop [] ;counter
      (println "[" *fn-name* "] loop")
@@ -145,7 +119,9 @@
        ;put on write queue
      (recur)))))
 
+
 (defn setup [c]
+  """ setup a network """
   (addlog c "setup")
   (write-queue c)
   (read-process c)
@@ -153,6 +129,7 @@
   (rep-process c))
 
 (defprocess connect [c1 c2]
+  """ connect nconns """
   (go-loop []
     (let [msg1 (<! (get @c1 :write_queue))]
       (println "from c1 write to c2")
@@ -169,25 +146,26 @@
 ;;;;; REPL
 
 
-(in-ns 'nodeclj.neco)
+;(in-ns 'nodeclj.neco)
 
-(def c1 (new-conn))
-(setup c1)
+;(def c1 (new-nconn))
+;(setup c1)
 
-(def c2 (new-conn))
-(setup c2)
+;; (def c2 (new-nconn))
+;; (setup c2)
 
-(simnet c1 c2)
+;; (simnet c1 c2)
 
-(def t {:type :REQ :CMD :PING})
+;; (def t {:type :REQ :CMD :PING})
 
-(put! (:read_queue @c1) t)
+;; (put! (:read_queue @c1) t)
 
-(put! (:write_queue @c1) t)
+;; (put! (:write_queue @c1) t)
 
-(take! (:read_queue @c2) (fn [x] (println x)))
+;; (take! (:read_queue @c2) (fn [x] (println x)))
 
-(write-queue c1)
+;; (write-queue c1)
+
 
 ;(go-loop [] 
 ;  (println ">>> " (<! (:read_queue @c2)))

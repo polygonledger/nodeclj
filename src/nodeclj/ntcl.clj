@@ -99,20 +99,6 @@
     conn))
 
 
-(defn serve1 [port]
-  "inbound connections"
-  (println "serve " port)  
-  ;(with-open [srv-sock (ServerSocket. port)
-  (let [srv-sock (ServerSocket. port)
-        socket (.accept srv-sock)
-        conn (wrap-socket socket)
-        ]
-    (println "connected " conn)
-    (doto (Thread. #(read-queue conn)) (.start))
-    (doto (Thread. #(read-processor conn)) (.start))
-    (doto (Thread. #(write-queue conn)) (.start))    
-    ))
-
 (defn serve [nodeport]
   (println "serve " nodeport)
   (let [running (atom true)]
@@ -128,3 +114,50 @@
             (doto (Thread. #(read-processor conn)) (.start))
             (doto (Thread. #(write-queue conn)) (.start))))))
     running))
+
+;;;; client
+
+(defn connect [server]
+  (let [socket (Socket. (:name server) (:port server))
+        in (BufferedReader. (InputStreamReader. (.getInputStream socket)))
+        out (PrintWriter. (.getOutputStream socket))
+        conn (ref {:in in :out out})]
+    (doto (Thread. #(conn-handler conn)) (.start))
+    conn))
+
+(defn write [conn msg]
+  (doto (:out @conn)
+    (.println (str msg "\r"))
+    (.flush)))
+
+(defn conn-handler [conn]
+  (println "conn handler")
+  (while (nil? (:exit @conn))
+    (let [msg (.readLine (:in @conn))]
+      (println msg)
+      (cond 
+       (re-find #"^ERROR :Closing Link:" msg) 
+       (dosync (alter conn merge {:exit true}))
+       (re-find #"^PING" msg)
+       (write conn (str "PONG "  (re-find #":.*" msg)))))))
+
+(defn login [conn user]
+  (write conn (str "NICK " (:nick user)))
+  (write conn (str "USER " (:nick user) " 0 * :" (:name user))))
+
+(def local {:name "localhost" :port 8888})
+(def user {:name "Nurullah Akkaya" :nick "nakkaya"})
+
+;(def cli (connect local))
+
+;(write cli (str {:type :REQ :cmd :PING}))
+
+;(login irc user)
+;(write irc "JOIN #clojure")
+;(write irc "QUIT")
+
+;(def r (serve 8888))
+
+;TODO client dial
+
+;{:type :REQ :cmd :PING}
