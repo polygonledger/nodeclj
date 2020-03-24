@@ -22,18 +22,20 @@
             (str "Test should have finished within " ms "ms."))
         v)))
 
-(defn test-async
-  "Asynchronous test awaiting ch to produce a value or close"
-  [ch]
-  (<!! ch))
 
 (deftest simple-async-test
   (let [ch (chan)]
     (go (>! ch "Hello"))
-    (test-async
+    (<!!
       (test-within 50
         (go (is (= "Hello" (<! ch))))))))
 
+(deftest simple-chan-test
+  (let [c1 (setup-processor (new-nconn))]
+    (go (>! (:read_queue @c1) "Hello"))
+    (<!!
+      (test-within 500
+        (go (is (= "Hello" (<! (:read_queue @c1)))))))))
 
 ;; (deftest contest-test
 ;;   (testing "connection."

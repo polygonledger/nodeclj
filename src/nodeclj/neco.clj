@@ -28,26 +28,12 @@
   (swap! m assoc k (conj (get @m k) v)))
 
 
-(defn processor [conn]
-  (while true
-    (let [req (<! (:REQin @conn))]
-      (println "req in: " req))))
-
-
-(defn process-msg [conn msg]
-  (println "process " msg)
-  
-  (case (:type msg)
-    :REQ (go (>! (:REQin @conn) msg))
-    :REP (go (>! (:REPin @conn) msg))))
-
-
-
 (defn new-nconn []
   (atom {:log [] :write_queue (chan) :read_queue (chan) :REQin (chan) :REQ_out (chan) :REPin (chan) :REPout (chan)}))
 
 
 (defn addlog [p s]
+  ;(println "addlog " p s)
   (swap-append! p :log s))
 
 (defmacro defprocess [name chanm & body]
@@ -69,10 +55,8 @@
 ;recur 
 
 
-
-
 (defprocess write-queue [c]
-  (addlog c (str "setup " *fn-name*))
+  (addlog c [*fn-name* (str "setup " *fn-name*)])
   ;(println (str "setup " *fn-name*))
   (go-loop []
     (println "[" *fn-name* "]")
@@ -83,46 +67,49 @@
 
 
 (defprocess read-process [c]
-  """ read from queue and process """
+  "" " read from queue and process " ""
   (println "setup " *fn-name*)
-   (go-loop [] ;counter
-     (println "[" *fn-name* "] loop")
-     (let [msg (<! (get @c :read_queue))
-           t (:type msg)]
+  (addlog c [*fn-name* (str "setup " *fn-name*)])
+  (go-loop [] ;counter
+    (println "[" *fn-name* "] loop")
+    (let [msg (<! (get @c :read_queue))
+          t (:type msg)]
       (addlog c (str "[" *fn-name* "] " msg " " t))
-       (case t
-         :REQ (>! (get @c :REQin) msg))
-     (recur))))
+      (case t
+        :REQ (>! (get @c :REQin) msg))
+      (recur))))
 
 
 (defprocess req-process [c]
-  """ process requests """
- (let [inc :REQin
-       outc :REPout]
-   (go-loop [] ;counter
-     (println "[" *fn-name* "] loop")
-     (let [req (<! (get @c inc))
-           cmd (:CMD req)] ;test malformed
-       (println "req " (str inc) ":" req)
-       (case cmd
-         :PING (>! (get @c outc) (str {:CMD :PONG})))         
-     (recur)))))
+  "" " process requests " ""
+  (addlog c [*fn-name* (str "setup " *fn-name*)])
+  (let [inc :REQin
+        outc :REPout]
+    (go-loop [] ;counter
+      (println "[" *fn-name* "] loop")
+      (let [req (<! (get @c inc))
+            cmd (:CMD req)] ;test malformed
+        (println "req " (str inc) ":" req)
+        (case cmd
+          :PING (>! (get @c outc) (str {:CMD :PONG})))         
+        (recur)))))
 
 (defprocess rep-process [c]
-  """ process replies """
- (let [outc :REPout]
-   (go-loop [] ;counter
-     (println "[" *fn-name* "] loop")
-     (let [rep (<! (get @c outc))]
-       (println (str outc) ":" rep " >> write queue")
-       (>! (get @c :write_queue) rep)
+  "" " process replies " ""
+  (addlog c [*fn-name* (str "setup " *fn-name*)])
+  (let [outc :REPout]
+    (go-loop [] ;counter
+      (println "[" *fn-name* "] loop")
+      (let [rep (<! (get @c outc))]
+        (println (str outc) ":" rep " >> write queue")
+        (>! (get @c :write_queue) rep)
        ;put on write queue
-     (recur)))))
+        (recur)))))
 
 
-(defn setup [c]
-  """ setup a network """
-  (addlog c "setup")
+(defn setup-processor [c]
+  ;""" setup a network """
+  (addlog c ["general" "setup processors"])
   (write-queue c)
   (read-process c)
   (req-process c)
@@ -142,23 +129,30 @@
   (connect c1 c2)
   (connect c2 c1))
 
+(defn print-log [c]
+  (doseq [[x y] (:log @c)]
+    (println "[" x "]=> " y)))
 
 ;;;;; REPL
 
 
-;(in-ns 'nodeclj.neco)
+(in-ns 'nodeclj.neco)
 
-;(def c1 (new-nconn))
-;(setup c1)
+(def c1 (new-nconn))
+(setup-processor c1)
 
 ;; (def c2 (new-nconn))
 ;; (setup c2)
 
 ;; (simnet c1 c2)
 
-;; (def t {:type :REQ :CMD :PING})
+(def t {:type :REQ :CMD :PING})
 
-;; (put! (:read_queue @c1) t)
+(put! (:read_queue @c1) t)
+(:log @c1)
+
+(print-log @c1)
+
 
 ;; (put! (:write_queue @c1) t)
 
