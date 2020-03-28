@@ -56,25 +56,26 @@
 
 
 (defprocess write-queue [c]
-  (addlog c [*fn-name* (str "setup " *fn-name*)])
+  (addlog c [*fn-name* (str "setup")])
   ;(println (str "setup " *fn-name*))
   (go-loop []
     (println "[" *fn-name* "]")
     (let [msg (<! (get @c :write_queue))]
-      (println "[" *fn-name* "] write to net " msg)
-      (addlog c (str "[" *fn-name* "] write to net " msg))
+      ;(println "[" *fn-name* "] write to net " msg)
+      (addlog c [*fn-name* (str " write to net" msg)])
     (recur))))
 
 
 (defprocess read-process [c]
   "" " read from queue and process " ""
   (println "setup " *fn-name*)
-  (addlog c [*fn-name* (str "setup " *fn-name*)])
+  (addlog c [*fn-name* (str "setup")])
   (go-loop [] ;counter
     (println "[" *fn-name* "] loop")
     (let [msg (<! (get @c :read_queue))
           t (:type msg)]
-      (addlog c (str "[" *fn-name* "] " msg " " t))
+      ;(addlog c (str "[" *fn-name* "] " msg " " t))
+      (addlog c [*fn-name* (str msg " " t)])
       (case t
         :REQ (>! (get @c :REQin) msg))
       (recur))))
@@ -82,7 +83,7 @@
 
 (defprocess req-process [c]
   "" " process requests " ""
-  (addlog c [*fn-name* (str "setup " *fn-name*)])
+  (addlog c [*fn-name* (str "setup")])
   (let [inc :REQin
         outc :REPout]
     (go-loop [] ;counter
@@ -96,7 +97,7 @@
 
 (defprocess rep-process [c]
   "" " process replies " ""
-  (addlog c [*fn-name* (str "setup " *fn-name*)])
+  (addlog c [*fn-name* (str "setup")])
   (let [outc :REPout]
     (go-loop [] ;counter
       (println "[" *fn-name* "] loop")
@@ -130,28 +131,26 @@
   (connect c2 c1))
 
 (defn print-log [c]
-  (doseq [[x y] (:log @c)]
-    (println "[" x "]=> " y)))
+  (doseq [[x y] (:log @c)] 
+    (println "[" x "] => " y)))
 
 ;;;;; REPL
 
+;; (in-ns 'nodeclj.neco)
 
-(in-ns 'nodeclj.neco)
-
-(def c1 (new-nconn))
-(setup-processor c1)
+;; (def c1 (new-nconn))
+;; (setup-processor c1)
 
 ;; (def c2 (new-nconn))
-;; (setup c2)
+;; (setup-processor c2)
 
 ;; (simnet c1 c2)
 
-(def t {:type :REQ :CMD :PING})
+;; (def t {:type :REQ :CMD :PING})
 
-(put! (:read_queue @c1) t)
-(:log @c1)
+;; (put! (:read_queue @c1) t)
 
-(print-log @c1)
+;; (print-log @c1)
 
 
 ;; (put! (:write_queue @c1) t)
