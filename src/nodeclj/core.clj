@@ -1,9 +1,13 @@
 (ns nodeclj.core  
   (:require [nodeclj.ntcl :as ntcl])
+  ;(:require [nodeclj.bitcoin :as b])
   ;(:require [nodeclj.tcp :as t])
   (:require [nodeclj.othertcp :as t])
-  (:import (java.net Socket)
-           (java.io PrintWriter InputStreamReader BufferedReader)))
+  (:import 
+   (org.bitcoinj.params MainNetParams)
+   (java.net Socket)
+   (java.io PrintWriter InputStreamReader BufferedReader)))
+
 
 (defonce nodeport 8888)
 
@@ -33,6 +37,7 @@
    :handler (t/wrap-io handler)))
 
 
+
 (defn -main
   [& args]
   (println "run main")
@@ -41,6 +46,8 @@
   ;(ntcl/serve nodeport)
   ;;(def a (serve-persistent 8888 #(.toUpperCase %)))
   ;(t/serve 8888)
+  ;(b/create-keypair)
+
   )
 
 

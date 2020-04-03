@@ -1,4 +1,4 @@
-(push)(ns forth
+(ns forth
   (:refer-clojure :exclude [pop!]))
 
 (declare forth-eval)
@@ -49,9 +49,20 @@
         (number? token) (push! stack token)
         :default (println token "??")))
 
+(defn ev [env]
+  (let [[dict stack stream] env]
+    )
+  )
+
 (defn repl [env]
   (let [[dict stack stream] env
         token (next-token stream)]
     (when (not= token "bye")
       (forth-eval dict stack token)
       (repl env))))
+
+(in-ns 'forth)
+
+(def e (init-env))
+
+;(repl e)
